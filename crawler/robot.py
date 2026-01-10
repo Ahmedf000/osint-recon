@@ -1,63 +1,59 @@
-import os
-import requests
-from dotenv import load_dotenv
-import sys
+from urllib.robotparser import RobotFileParser
+from urllib.parse import urlparse
+from typing import Dict
 
-SITEMAP = {
-        'sitemap_xml': ("robot.txt","filetype:xml site:{target} inurl:sitemap")
-}
 
-load_dotenv()
+class RobotChecker:
+    def __init__(self):
+        self.parsers: Dict[str, RobotFileParser] = {}
+        self.user_agent = "OSINT-Recon-Bot"
 
-API_KEY = os.getenv("GOOGLE_API_KEY")
-CX = os.getenv("GOOGLE_CX")
-
-if not API_KEY or not CX:
-    print("[!] Error: API credentials not found!")
-    print("[!] Make sure .env file exists with GOOGLE_API_KEY and GOOGLE_CX")
-    sys.exit(1)
-
-def robot_auth():
-    template = []
-    for category in SITEMAP:
-        for name, templates in SITEMAP[category]:
-            template.append((templates))
-
-    for iden, temp in template:
-        if iden == 'robots.txt':
-            continue
+    def can_crawl(self, url: str) -> bool:
         try:
-            filetype, site, url = temp
-            template_dork = template.format(target=site)
-            url = "https://www.googleapis.com/customsearch/v1"
-            params = {
-                'key': API_KEY,
-                'cx': CX,
-                'q': template_dork,
-            }
+            parsed = urlparse(url)
+            domain = f"{parsed.scheme}://{parsed.netloc}"
 
-            try:
-                links = []
-                request = requests.get(url, params=params)
-                request.raise_for_status()
+            if domain not in self.parsers:
+                self._load_robots(domain)
 
-                response = request.json()
-                links = response['items']
-                for link in links[0]:
-                    robot_response = requests.get(link['link'])
-                return robot_response
+            parser = self.parsers.get(domain)
 
-            except requests.exceptions.RequestException as e:
-                print(e)
-            except Exception as e:
-                print(f"[!] Error: {e}")
-            except requests.exceptions.HTTPError as e:
-                print(f"[!] Error for HTTP requets: {e}")
+            if parser is None:
+                return True
+
+            return parser.can_fetch(self.user_agent, url)
 
         except Exception as e:
-            print(f"[!] Error: {e}")
+            print(f"[!] Error checking robots.txt: {e}")
+            return True
 
+    def get_crawl_delay(self, url: str) -> float:
+        try:
+            parsed = urlparse(url)
+            domain = f"{parsed.scheme}://{parsed.netloc}"
 
+            if domain not in self.parsers:
+                self._load_robots(domain)
 
+            parser = self.parsers.get(domain)
 
+            if parser is None:
+                return 0.0
 
+            delay = parser.crawl_delay(self.user_agent)
+            return delay if delay is not None else 0.0
+
+        except:
+            return 0.0
+
+    def _load_robots(self, domain: str):
+        try:
+            robots_url = f"{domain}/robots.txt"
+            parser = RobotFileParser()
+            parser.set_url(robots_url)
+            parser.read()
+            self.parsers[domain] = parser
+            print(f"[*] Loaded robots.txt for {domain}")
+        except Exception as e:
+            print(f"[!] Could not load robots.txt for {domain}: {e}")
+            self.parsers[domain] = None

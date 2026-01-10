@@ -1,4 +1,7 @@
 class Colors:
+
+
+
     RED = '\033[91m'
     GREEN = '\033[92m'
     YELLOW = '\033[93m'
@@ -6,6 +9,7 @@ class Colors:
     MAGENTA = '\033[95m'
     CYAN = '\033[96m'
     WHITE = '\033[97m'
+
 
     BOLD = '\033[1m'
     UNDERLINE = '\033[4m'
@@ -16,17 +20,26 @@ class Colors:
     def red(text):
         return f"{Colors.RED}{text}{Colors.END}"
 
+    @staticmethod
     def green(text):
         return f"{Colors.GREEN}{text}{Colors.END}"
 
+    @staticmethod
     def yellow(text):
         return f"{Colors.YELLOW}{text}{Colors.END}"
 
+    @staticmethod
     def blue(text):
         return f"{Colors.BLUE}{text}{Colors.END}"
 
+    @staticmethod
     def cyan(text):
         return f"{Colors.CYAN}{text}{Colors.END}"
 
+    @staticmethod
     def bold(text):
         return f"{Colors.BOLD}{text}{Colors.END}"
+
+    @staticmethod
+    def magenta(text):
+        return f"{Colors.MAGENTA}{text}{Colors.END}"
