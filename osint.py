@@ -6,6 +6,7 @@ import requests
 import sys
 import argparse
 from template import DORKS
+from crawler.proxy import *
 import time
 import re
 import os
@@ -63,6 +64,7 @@ def show_banner():
        Automated OSINT tool for reconnaissance using Google dorking.
        Supports 106 dorks across multiple categories for both domain
        and person-based intelligence gathering.
+       And Additional Crawler for A given website.
 
      TARGET TYPES:
        • DOMAIN MODE: Scan websites, infrastructure, files
@@ -165,7 +167,7 @@ Examples:
     parser.add_argument("-t", "--target", help="Target domain or person name")
     parser.add_argument("-d", "--dork", type=int, default=1, help="Dork number (1-106)")
     parser.add_argument("-l", "--list", action="store_true", help="List all available dorks")
-
+    parser.add_argument("-c", "--crawler", action="store_true", help="Crawler mode to your target website")
     args = parser.parse_args()
 
 
@@ -173,6 +175,9 @@ Examples:
         show_banner()
         sys.exit(0)
 
+    if args.crawler:
+        if len(sys.argv[:1]) != 5:
+            print("Usage: python osint.py -c/--crawler [localhost] [localport] [remote] [] [] \n")
 
     if args.list:
         print_all_dorks()
