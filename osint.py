@@ -14,7 +14,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-API_KEY = os.getenv('GGOLGE_API_KEY')
+API_KEY = os.getenv('GOOGLE_API_KEY')
 CX = os.getenv('GOOGLE_CX')
 
 if not API_KEY or not CX:
