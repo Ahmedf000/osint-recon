@@ -2,6 +2,7 @@ import requests
 from bs4 import BeautifulSoup
 from urllib.parse import urljoin, urlparse
 from typing import List, Set, Optional
+from crawler.proxy import *
 
 
 def crawler(url: str, proxy_manager=None, depth: int = 1, max_depth: int = 2, visited: Set[str] = None) -> List[str]:

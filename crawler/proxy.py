@@ -13,7 +13,11 @@ class ProxyManager:
 
     def load_proxies_from_list(self, proxies_list: List[str]):
         print(f"Loading {len(proxies_list)} proxies.....")
-        self.proxies = [p for p in proxies_list if p not in self.failed_proxies]
+
+        for p in proxies_list:
+            if p not in self.failed_proxies:
+                self.proxies.append(p)
+
         print(f"Loaded {len(self.proxies)} proxies.")
 
 
@@ -62,7 +66,6 @@ class ProxyManager:
             else:
                 print(f"[!] failed to fetch proxies from API: {response.status_code}")
                 return False
-
 
 
 

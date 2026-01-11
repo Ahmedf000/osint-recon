@@ -95,7 +95,6 @@ def print_all_dorks():
     print(" " * 25 + "AVAILABLE DORKS")
     print("=" * 70)
 
-    # Separate by type
     domain_dorks = {}
     person_dorks = {}
 
@@ -115,7 +114,6 @@ def print_all_dorks():
                         person_dorks[category][subcategory] = []
                     person_dorks[category][subcategory].append((num, name, template))
 
-    # Print DOMAIN dorks
     print(Colors.cyan("\nDOMAIN-BASED DORKS (Target: website/company)"))
     print("-" * 70)
     print("Usage: python osint.py -t github.com -d <number>\n")
@@ -135,7 +133,7 @@ def print_all_dorks():
 
     for category in sorted(person_dorks.keys()):
         total = sum(len(person_dorks[category][sub]) for sub in person_dorks[category])
-        print(Colors.bold(f"\n📁 {category.upper().replace('_', ' ')} ({total} dorks)"))
+        print(Colors.bold(f"\n {category.upper().replace('_', ' ')} ({total} dorks)"))
 
         for subcategory in sorted(person_dorks[category].keys()):
             print(f"\n  └─ {subcategory.capitalize()}:")
@@ -186,7 +184,7 @@ def save_results_txt(results, filename):
 
 def main():
     parser = argparse.ArgumentParser(
-        description='🔍 OSINT Recon - Google Dork Reconnaissance Tool',
+        description='OSINT Recon - Google Dork Reconnaissance Tool',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
@@ -239,3 +237,126 @@ Examples:
             print(Colors.yellow("[!] Example: github.com or api.github.com"))
             print(Colors.yellow(f"[!] Dork #{args.dork} ({name}) requires a domain target"))
             sys.exit(1)
+
+    proxy_manager = None
+    if args.use_proxy:
+        print(Colors.cyan("\n[*] Initializing proxy system..."))
+        proxy_manager = ProxyManager()
+
+        if proxy_manager.fetch_free_proxies():
+            proxy_manager.test_all_proxies(max_test=20)  # Test first 20 to save time
+
+            if proxy_manager.get_working_count() > 0:
+                print(Colors.green(f"[+] {proxy_manager.get_working_count()} proxies ready!\n"))
+            else:
+                print(Colors.yellow("[!] No working proxies found, continuing without them\n"))
+                proxy_manager = None
+        else:
+            print(Colors.yellow("[!] Could not fetch proxies, continuing without them\n"))
+            proxy_manager = None
+
+    print(Colors.cyan(f"\n[*] Running: {name}"))
+    print(Colors.cyan(f"[*] Type: {' Domain' if dork_type == 'domain' else ' Person'}"))
+    print(Colors.cyan(f"[*] Target: {args.target}"))
+
+    query = template.format(target=args.target)
+    print(Colors.cyan(f"[*] Search query: {query}"))
+    print(Colors.cyan("[*] Searching Google...\n"))
+
+    url = "https://www.googleapis.com/customsearch/v1"
+    params = {
+        'key': API_KEY,
+        'cx': CX,
+        'q': query,
+    }
+
+    try:
+        if proxy_manager and proxy_manager.get_working_count() > 0:
+            proxy = proxy_manager.get_next_proxy()
+            proxies_dict = proxy_manager.get_proxy_dict(proxy)
+            print(Colors.yellow(f"[*] Using proxy: {proxy}"))
+            response = requests.get(url, params=params, proxies=proxies_dict, timeout=15)
+        else:
+            response = requests.get(url, params=params, timeout=15)
+
+        response.raise_for_status()
+        data = response.json()
+
+        results_list = []
+
+        if 'items' in data:
+            print(Colors.green(f"[+] Found {len(data['items'])} results:\n"))
+
+            for i, item in enumerate(data['items'], 1):
+                print(Colors.bold(f"[{i}] {item['title']}"))
+                print(f"    {item['link']}")
+                if 'snippet' in item:
+                    print(Colors.yellow(f"    {item['snippet'][:100]}..."))
+                print()
+
+                results_list.append(item)
+
+            if args.crawl and results_list:
+                print(Colors.cyan("\n[*] Crawler mode enabled!"))
+                print(Colors.cyan(f"[*] Crawling {len(results_list)} discovered URLs (depth: {args.depth})...\n"))
+
+                all_crawled = []
+                for item in results_list:
+                    try:
+                        print(Colors.cyan(f"[*] Crawling: {item['link']}"))
+                        crawled = crawler(
+                            item['link'],
+                            proxy_manager=proxy_manager,
+                            max_depth=args.depth
+                        )
+                        all_crawled.extend(crawled)
+                    except Exception as e:
+                        print(Colors.red(f"[!] Error crawling {item['link']}: {e}"))
+                        continue
+
+                all_crawled = list(set(all_crawled))
+
+                print(Colors.green(f"\n[+] Crawling complete!"))
+                print(Colors.green(f"[+] Original results: {len(results_list)}"))
+                print(Colors.green(f"[+] Additional links found: {len(all_crawled)}"))
+                print(Colors.green(f"[+] Total URLs discovered: {len(results_list) + len(all_crawled)}\n"))
+
+                if all_crawled:
+                    print(Colors.yellow("Sample of discovered URLs:"))
+                    for url in all_crawled[:10]:  # Show first 10
+                        print(Colors.yellow(f"    {url}"))
+
+                    if len(all_crawled) > 10:
+                        print(Colors.yellow(f"    ... and {len(all_crawled) - 10} more"))
+
+            if args.output:
+                if args.output.endswith('.json'):
+                    save_results_json(results_list, args.output)
+                else:
+                    # Default to TXT if no extension or unknown extension
+                    if not args.output.endswith('.txt'):
+                        args.output += '.txt'
+                    save_results_txt(results_list, args.output)
+        else:
+            print(Colors.yellow("[i] No results found"))
+
+        print(Colors.cyan("\n[*] Rate limiting: waiting 2 seconds..."))
+        time.sleep(2)
+
+        print(Colors.green("\n[+] Scan complete!"))
+
+    except requests.exceptions.Timeout:
+        print(Colors.red("[!] Request timeout - the API took too long to respond"))
+    except requests.exceptions.RequestException as e:
+        print(Colors.red(f"[!] Error making request: {e}"))
+    except KeyError as e:
+        print(Colors.red(f"[!] Error parsing response: {e}"))
+        print(Colors.yellow("[!] Check your API key and CX are correct in .env file"))
+    except Exception as e:
+        print(Colors.red(f"[!] Unexpected error: {e}"))
+        import traceback
+        traceback.print_exc()
+
+
+if __name__ == '__main__':
+    main()
