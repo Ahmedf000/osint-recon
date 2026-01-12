@@ -9,18 +9,14 @@ class ProxyManager:
         self.failed_proxies = set()
         self.current_index = 0
 
-
-
     def load_proxies_from_list(self, proxies_list: List[str]):
-        print(f"Loading {len(proxies_list)} proxies.....")
+        print(f"[*] Loading {len(proxies_list)} proxies...")
 
         for p in proxies_list:
             if p not in self.failed_proxies:
                 self.proxies.append(p)
 
-        print(f"Loaded {len(self.proxies)} proxies.")
-
-
+        print(f"[+] Loaded {len(self.proxies)} proxies.")
 
     def load_proxies_from_file(self, filename: str):
         try:
@@ -35,15 +31,12 @@ class ProxyManager:
 
             self.load_proxies_from_list(formatted)
         except FileNotFoundError:
-            print(f"[!] File {filename} not found.]")
+            print(f"[!] File {filename} not found.")
         except Exception as e:
-            print(f"[!] {e}.")
+            print(f"[!] Error loading proxies from file: {e}")
 
-
-
-
-    def fetch_free_proxy(self):
-        print(f"[*] Fetching Free proxies from API....")
+    def fetch_free_proxies(self):
+        print(f"[*] Fetching free proxies from API...")
         try:
             response = requests.get(
                 'https://api.proxyscrape.com/v2/',
@@ -64,12 +57,13 @@ class ProxyManager:
                 self.load_proxies_from_list(formatted)
                 return True
             else:
-                print(f"[!] failed to fetch proxies from API: {response.status_code}")
+                print(f"[!] Failed to fetch proxies from API: {response.status_code}")
                 return False
+        except Exception as e:
+            print(f"[!] Error fetching proxies: {e}")
+            return False
 
-
-
-    def test_proxies(self, proxy:str, timeout:int=5) -> bool:
+    def test_proxy(self, proxy: str, timeout: int = 5) -> bool:
         try:
             test_url = 'http://httpbin.org/ip'
             proxies = {
@@ -85,20 +79,18 @@ class ProxyManager:
         except:
             return False
 
-
-
-    def test_all_proxies(self, max_test:int=50):
+    def test_all_proxies(self, max_test: int = 50):
         if not self.proxies:
             print("[!] No proxies to test.")
             return
 
         test_count = min(len(self.proxies), max_test)
-        print(f"[*] Testing {test_count} proxies (this may take a minute).")
+        print(f"[*] Testing {test_count} proxies (this may take a minute)...")
 
         working = []
         for i, proxy in enumerate(self.proxies[:test_count], 1):
             print(f"[*] Testing proxy {i}/{test_count}...", end='\r')
-            if self.test_proxies(proxy):
+            if self.test_proxy(proxy):
                 working.append(proxy)
 
         self.proxies = working
@@ -107,7 +99,11 @@ class ProxyManager:
         if len(self.proxies) == 0:
             print("[!] WARNING: No working proxies found!")
 
-
+    def mark_proxy_failed(self, proxy: str):
+        self.failed_proxies.add(proxy)
+        if proxy in self.proxies:
+            self.proxies.remove(proxy)
+            print(f"[!] Removed failed proxy: {proxy}")
 
     def get_next_proxy(self, strategy: str = 'rotate') -> Optional[str]:
         if not self.proxies:
@@ -122,66 +118,38 @@ class ProxyManager:
         else:
             return self.proxies[0]
 
-
     def get_proxy_dict(self, proxy: str) -> dict:
         return {
             'http': proxy,
             'https': proxy
         }
 
-
     def get_working_count(self) -> int:
         return len(self.proxies)
-
 
 
 def make_request_with_proxy(url: str, proxy_manager: ProxyManager, max_retries: int = 3):
     for attempt in range(max_retries):
         proxy = proxy_manager.get_next_proxy()
 
-    if not proxy:
+        if not proxy:
+            try:
+                return requests.get(url, timeout=10)
+            except Exception as e:
+                print(f"[!] Request failed without proxy: {e}")
+                return None
+
         try:
-            return requests.get(url, timeout=10)
+            proxies = proxy_manager.get_proxy_dict(proxy)
+            response = requests.get(url, proxies=proxies, timeout=10)
+            return response
+
         except Exception as e:
-            print(f"[!] Request failed without proxy: {e}")
-            return None
+            print(f"[!] Proxy {proxy} failed: {e}")
+            proxy_manager.mark_proxy_failed(proxy)
 
-    try:
-        proxies = proxy_manager.get_proxy_dict(proxy)
-        response = requests.get(url, proxies=proxies, timeout=10)
-        return response
-
-    except Exception as e:
-        print(f"[!] Proxy {proxy} failed: {e}")
-        proxy_manager.mark_proxy_failed(proxy)
-
-        if attempt < max_retries - 1:
-            print(f"[*] Retrying with different proxy... ({attempt + 2}/{max_retries})")
+            if attempt < max_retries - 1:
+                print(f"[*] Retrying with different proxy... ({attempt + 2}/{max_retries})")
 
     print("[!] All proxy attempts failed")
     return None
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

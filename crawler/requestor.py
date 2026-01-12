@@ -2,10 +2,18 @@ import requests
 from bs4 import BeautifulSoup
 from urllib.parse import urljoin, urlparse
 from typing import List, Set, Optional
-from crawler.proxy import *
+import time
 
 
-def crawler(url: str, proxy_manager=None, depth: int = 1, max_depth: int = 2, visited: Set[str] = None) -> List[str]:
+def crawler(
+        url: str,
+        proxy_manager=None,
+        depth: int = 1,
+        max_depth: int = 2,
+        visited: Optional[Set[str]] = None,
+        robot_checker=None,
+        respect_robots: bool = True
+) -> List[str]:
 
     if visited is None:
         visited = set()
@@ -16,8 +24,17 @@ def crawler(url: str, proxy_manager=None, depth: int = 1, max_depth: int = 2, vi
     if depth > max_depth:
         return []
 
-    visited.add(url)
+    if respect_robots and robot_checker:
+        if not robot_checker.can_crawl(url):
+            print(f"[!] Blocked by robots.txt: {url}")
+            return []
 
+        delay = robot_checker.get_crawl_delay(url)
+        if delay > 0:
+            print(f"[*] Respecting crawl delay: {delay}s")
+            time.sleep(delay)
+
+    visited.add(url)
     hrefs = []
 
     try:
@@ -36,18 +53,21 @@ def crawler(url: str, proxy_manager=None, depth: int = 1, max_depth: int = 2, vi
                     headers=headers,
                     timeout=10
                 )
-
             except Exception as e:
                 print(f"[!] Proxy failed for {url}, trying without proxy")
                 proxy_manager.mark_proxy_failed(proxy)
                 webpage = requests.get(url, headers=headers, timeout=10)
-
-
         else:
             webpage = requests.get(url, headers=headers, timeout=10)
 
+        if webpage.status_code != 200:
+            print(f"[!] HTTP {webpage.status_code} for {url}")
+            return []
+
         soup = BeautifulSoup(webpage.content, 'html.parser')
         links = soup.find_all('a')
+
+        base_domain = urlparse(url).netloc
 
         for link in links:
             href = link.get('href')
@@ -66,6 +86,7 @@ def crawler(url: str, proxy_manager=None, depth: int = 1, max_depth: int = 2, vi
             if not absolute_url or absolute_url == url:
                 continue
 
+
             if absolute_url not in visited:
                 hrefs.append(absolute_url)
 
@@ -74,9 +95,19 @@ def crawler(url: str, proxy_manager=None, depth: int = 1, max_depth: int = 2, vi
         print(f"[*] Crawled {url}: found {len(hrefs)} links (depth {depth}/{max_depth})")
 
         if depth < max_depth:
-            for found_url in hrefs[:5]:
+            links_to_crawl = hrefs[:5]
+
+            for found_url in links_to_crawl:
                 if found_url not in visited:
-                    sub_hrefs = crawler(found_url, proxy_manager, depth + 1, max_depth, visited)
+                    sub_hrefs = crawler(
+                        found_url,
+                        proxy_manager,
+                        depth + 1,
+                        max_depth,
+                        visited,
+                        robot_checker,
+                        respect_robots
+                    )
                     hrefs.extend(sub_hrefs)
 
         return hrefs
@@ -92,5 +123,15 @@ def crawler(url: str, proxy_manager=None, depth: int = 1, max_depth: int = 2, vi
         return []
 
 
-def simple_crawler(url: str) -> List[str]:
-    return crawler(url, max_depth=1)
+def simple_crawler(url: str, proxy_manager=None) -> List[str]:
+    return crawler(url, proxy_manager=proxy_manager, max_depth=1)
+
+
+def crawl_with_robots(url: str, proxy_manager=None, robot_checker=None, max_depth: int = 1) -> List[str]:
+    return crawler(
+        url,
+        proxy_manager=proxy_manager,
+        max_depth=max_depth,
+        robot_checker=robot_checker,
+        respect_robots=True
+    )

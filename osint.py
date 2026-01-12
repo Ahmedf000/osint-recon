@@ -1,6 +1,3 @@
-# WARNING: API keys hardcoded for testing only!
-# TO DO/ move .env file before any git commits
-
 import requests
 import sys
 import argparse
@@ -29,8 +26,8 @@ if not API_KEY or not CX:
 
 
 def show_banner():
-    banner = """
-                                                                                                                                                                                                                                                
+    banner = r"""
+
                                                               ..                                                         
                                                              .+#:       .-=-.                                            
                                                              -%==.   .-*+:.-++:                                          
@@ -63,12 +60,12 @@ def show_banner():
                                 +.                                                                                               
                                 :.                                                                 
                                   :
-                                                                                                                  
+
      ABOUT:
        Automated OSINT tool for reconnaissance using Google dorking.
        Supports 106 dorks across multiple categories for both domain
        and person-based intelligence gathering.
-       And Additional Crawler for A given website.
+       And Additional Crawler for a given website.
 
      TARGET TYPES:
        • DOMAIN MODE: Scan websites, infrastructure, files
@@ -83,7 +80,7 @@ def show_banner():
 
     LEGAL DISCLAIMER:
        This tool is made just for learning, experimentation, and general OSINT curiosity using publicly available information. 
-       It’s meant for fun and education only, not for targeting people, invading privacy, or doing anything illegal. 
+       It's meant for fun and education only, not for targeting people, invading privacy, or doing anything illegal. 
        Whatever you do with it is your own responsibility, so please use it respectfully and within the law.
 
     """
@@ -127,13 +124,13 @@ def print_all_dorks():
             for num, name, template in sorted(domain_dorks[category][subcategory]):
                 print(f"     {num:3d}: {name}")
 
-    print(Colors.cyan("\n\n PERSON-BASED DORKS (Target: individual's name)"))
+    print(Colors.cyan("\n\nPERSON-BASED DORKS (Target: individual's name)"))
     print("-" * 70)
     print('Usage: python osint.py -t "John Doe" -d <number>\n')
 
     for category in sorted(person_dorks.keys()):
         total = sum(len(person_dorks[category][sub]) for sub in person_dorks[category])
-        print(Colors.bold(f"\n {category.upper().replace('_', ' ')} ({total} dorks)"))
+        print(Colors.bold(f"\n{category.upper().replace('_', ' ')} ({total} dorks)"))
 
         for subcategory in sorted(person_dorks[category].keys()):
             print(f"\n  └─ {subcategory.capitalize()}:")
@@ -145,8 +142,7 @@ def print_all_dorks():
     print("=" * 70 + "\n")
 
 
-def find_dorks(dork_num):
-
+def find_dork(dork_num):
     for category in DORKS:
         for subcategory in DORKS[category]:
             if dork_num in DORKS[category][subcategory]:
@@ -154,24 +150,37 @@ def find_dorks(dork_num):
     return None
 
 
-def save_results_json(results, filename):
+def save_results_json(results, filename, metadata=None):
     try:
+        output = {
+            'metadata': metadata or {},
+            'timestamp': datetime.now().isoformat(),
+            'results_count': len(results),
+            'results': results
+        }
+
         with open(filename, 'w', encoding='utf-8') as f:
-            json.dump(results, f, indent=2, ensure_ascii=False)
+            json.dump(output, f, indent=2, ensure_ascii=False)
         print(Colors.green(f"[+] Results saved to {filename}"))
     except Exception as e:
         print(Colors.red(f"[!] Error saving JSON: {e}"))
 
 
-def save_results_txt(results, filename):
+def save_results_txt(results, filename, metadata=None):
     try:
         with open(filename, 'w', encoding='utf-8') as f:
             f.write(f"OSINT Recon Results\n")
             f.write(f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+
+            if metadata:
+                f.write(f"\nMetadata:\n")
+                for key, value in metadata.items():
+                    f.write(f"  {key}: {value}\n")
+
             f.write("=" * 70 + "\n\n")
 
-            for item in results:
-                f.write(f"Title: {item['title']}\n")
+            for i, item in enumerate(results, 1):
+                f.write(f"[{i}] {item['title']}\n")
                 f.write(f"URL: {item['link']}\n")
                 if 'snippet' in item:
                     f.write(f"Snippet: {item['snippet']}\n")
@@ -180,6 +189,11 @@ def save_results_txt(results, filename):
         print(Colors.green(f"[+] Results saved to {filename}"))
     except Exception as e:
         print(Colors.red(f"[!] Error saving TXT: {e}"))
+
+
+def validate_domain(domain):
+    pattern = r'^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$'
+    return re.match(pattern, domain) is not None
 
 
 def main():
@@ -194,6 +208,8 @@ Examples:
   python osint.py -t site.com -d 5 --crawl  # Dork + crawl results
   python osint.py -t site.com -d 5 -p       # Use proxy rotation
   python osint.py -t site.com -d 5 -o results.json  # Save to file
+  python osint.py -t site.com -d 5 --depth 2        # Deeper crawling
+  python osint.py -t site.com -d 5 --no-robots      # Ignore robots.txt
         """
     )
 
@@ -204,6 +220,8 @@ Examples:
     parser.add_argument("-p", "--use-proxy", action="store_true", help="Use proxy rotation")
     parser.add_argument("-o", "--output", help="Save results to file (JSON or TXT)")
     parser.add_argument("--depth", type=int, default=1, help="Crawler depth (default: 1)")
+    parser.add_argument("--no-robots", action="store_true", help="Ignore robots.txt restrictions")
+    parser.add_argument("--max-results", type=int, default=10, help="Maximum results to fetch (default: 10)")
 
     args = parser.parse_args()
 
@@ -221,7 +239,7 @@ Examples:
         print(Colors.yellow("[!] Use -h for help"))
         sys.exit(1)
 
-    dork_info = find_dorks(args.dork)
+    dork_info = find_dork(args.dork)
 
     if dork_info is None:
         print(Colors.red("[!] Invalid Dork number"))
@@ -231,7 +249,7 @@ Examples:
     name, template, dork_type = dork_info
 
     if dork_type == "domain":
-        if not re.match(r'^[a-zA-Z0-9.-]+$', args.target):
+        if not validate_domain(args.target):
             print(Colors.red("[!] Invalid domain format for domain-based dork"))
             print(Colors.yellow("[!] Domain can only contain: letters, numbers, dots, hyphens"))
             print(Colors.yellow("[!] Example: github.com or api.github.com"))
@@ -244,7 +262,7 @@ Examples:
         proxy_manager = ProxyManager()
 
         if proxy_manager.fetch_free_proxies():
-            proxy_manager.test_all_proxies(max_test=20)  # Test first 20 to save time
+            proxy_manager.test_all_proxies(max_test=20)
 
             if proxy_manager.get_working_count() > 0:
                 print(Colors.green(f"[+] {proxy_manager.get_working_count()} proxies ready!\n"))
@@ -255,19 +273,33 @@ Examples:
             print(Colors.yellow("[!] Could not fetch proxies, continuing without them\n"))
             proxy_manager = None
 
+    robot_checker = None
+    if args.crawl and not args.no_robots:
+        robot_checker = RobotChecker()
+        print(Colors.cyan("[*] Robot checker initialized (respecting robots.txt)\n"))
+
     print(Colors.cyan(f"\n[*] Running: {name}"))
-    print(Colors.cyan(f"[*] Type: {' Domain' if dork_type == 'domain' else ' Person'}"))
+    print(Colors.cyan(f"[*] Type: {'Domain' if dork_type == 'domain' else 'Person'}"))
     print(Colors.cyan(f"[*] Target: {args.target}"))
 
     query = template.format(target=args.target)
     print(Colors.cyan(f"[*] Search query: {query}"))
     print(Colors.cyan("[*] Searching Google...\n"))
 
+    metadata = {
+        'dork_number': args.dork,
+        'dork_name': name,
+        'dork_type': dork_type,
+        'target': args.target,
+        'query': query
+    }
+
     url = "https://www.googleapis.com/customsearch/v1"
     params = {
         'key': API_KEY,
         'cx': CX,
         'q': query,
+        'num': min(args.max_results, 10)  # Google API max is 10 per request
     }
 
     try:
@@ -288,10 +320,12 @@ Examples:
             print(Colors.green(f"[+] Found {len(data['items'])} results:\n"))
 
             for i, item in enumerate(data['items'], 1):
-                print(Colors.bold(f"[{i}] {item['title']}"))
-                print(f"    {item['link']}")
+                # Print to console
+                print(Colors.bold(f"[{i}] {item.get('title', 'No Title')}"))
+                print(f"    {item.get('link', 'No Link')}")
                 if 'snippet' in item:
-                    print(Colors.yellow(f"    {item['snippet'][:100]}..."))
+                    snippet = item['snippet'][:150]
+                    print(Colors.yellow(f"    {snippet}..."))
                 print()
 
                 results_list.append(item)
@@ -303,15 +337,22 @@ Examples:
                 all_crawled = []
                 for item in results_list:
                     try:
-                        print(Colors.cyan(f"[*] Crawling: {item['link']}"))
+                        url_to_crawl = item.get('link')
+                        if not url_to_crawl:
+                            continue
+
+                        print(Colors.cyan(f"[*] Crawling: {url_to_crawl}"))
                         crawled = crawler(
-                            item['link'],
+                            url_to_crawl,
                             proxy_manager=proxy_manager,
-                            max_depth=args.depth
+                            max_depth=args.depth,
+                            robot_checker=robot_checker,
+                            respect_robots=not args.no_robots
                         )
                         all_crawled.extend(crawled)
+                        time.sleep(1)
                     except Exception as e:
-                        print(Colors.red(f"[!] Error crawling {item['link']}: {e}"))
+                        print(Colors.red(f"[!] Error crawling {item.get('link', 'unknown')}: {e}"))
                         continue
 
                 all_crawled = list(set(all_crawled))
@@ -323,22 +364,32 @@ Examples:
 
                 if all_crawled:
                     print(Colors.yellow("Sample of discovered URLs:"))
-                    for url in all_crawled[:10]:  # Show first 10
+                    for url in all_crawled[:10]:
                         print(Colors.yellow(f"    {url}"))
 
                     if len(all_crawled) > 10:
                         print(Colors.yellow(f"    ... and {len(all_crawled) - 10} more"))
 
+                metadata['crawled_urls'] = len(all_crawled)
+
             if args.output:
                 if args.output.endswith('.json'):
-                    save_results_json(results_list, args.output)
+                    save_results_json(results_list, args.output, metadata)
                 else:
-                    # Default to TXT if no extension or unknown extension
                     if not args.output.endswith('.txt'):
                         args.output += '.txt'
-                    save_results_txt(results_list, args.output)
+                    save_results_txt(results_list, args.output, metadata)
         else:
             print(Colors.yellow("[i] No results found"))
+
+            if 'error' in data:
+                error_msg = data['error'].get('message', 'Unknown error')
+                print(Colors.red(f"[!] API Error: {error_msg}"))
+
+                if 'quota' in error_msg.lower():
+                    print(Colors.yellow("[!] You may have exceeded your daily quota (100 queries/day for free tier)"))
+                elif 'invalid' in error_msg.lower():
+                    print(Colors.yellow("[!] Check your API key and CX in .env file"))
 
         print(Colors.cyan("\n[*] Rate limiting: waiting 2 seconds..."))
         time.sleep(2)
@@ -347,6 +398,21 @@ Examples:
 
     except requests.exceptions.Timeout:
         print(Colors.red("[!] Request timeout - the API took too long to respond"))
+    except requests.exceptions.HTTPError as e:
+        print(Colors.red(f"[!] HTTP Error: {e}"))
+        if hasattr(e.response, 'json'):
+            try:
+                error_data = e.response.json()
+                if 'error' in error_data:
+                    error_msg = error_data['error'].get('message', 'Unknown error')
+                    print(Colors.red(f"[!] API Message: {error_msg}"))
+
+                    if 'quota' in error_msg.lower():
+                        print(Colors.yellow("[!] Daily quota exceeded. Free tier allows 100 queries per day."))
+                    elif 'invalid' in error_msg.lower() or 'credentials' in error_msg.lower():
+                        print(Colors.yellow("[!] Invalid API credentials. Check your .env file."))
+            except:
+                pass
     except requests.exceptions.RequestException as e:
         print(Colors.red(f"[!] Error making request: {e}"))
     except KeyError as e:

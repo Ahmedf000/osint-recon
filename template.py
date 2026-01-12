@@ -77,9 +77,6 @@ DORKS = {
         }
     },
 
-    # ============================================================
-    # PERSON-BASED DORKS (For individual reconnaissance)
-    # ============================================================
 
     'person_documents': {
         'professional': {

@@ -1,12 +1,12 @@
 from urllib.robotparser import RobotFileParser
 from urllib.parse import urlparse
-from typing import Dict
+from typing import Dict, Optional
 
 
 class RobotChecker:
-    def __init__(self):
-        self.parsers: Dict[str, RobotFileParser] = {}
-        self.user_agent = "OSINT-Recon-Bot"
+    def __init__(self, user_agent: str = "OSINT-Recon-Bot"):
+        self.parsers: Dict[str, Optional[RobotFileParser]] = {}
+        self.user_agent = user_agent
 
     def can_crawl(self, url: str) -> bool:
         try:
@@ -24,10 +24,11 @@ class RobotChecker:
             return parser.can_fetch(self.user_agent, url)
 
         except Exception as e:
-            print(f"[!] Error checking robots.txt: {e}")
+            print(f"[!] Error checking robots.txt for {url}: {e}")
             return True
 
     def get_crawl_delay(self, url: str) -> float:
+
         try:
             parsed = urlparse(url)
             domain = f"{parsed.scheme}://{parsed.netloc}"
@@ -41,9 +42,10 @@ class RobotChecker:
                 return 0.0
 
             delay = parser.crawl_delay(self.user_agent)
-            return delay if delay is not None else 0.0
+            return float(delay) if delay is not None else 0.0
 
-        except:
+        except Exception as e:
+            print(f"[!] Error getting crawl delay for {url}: {e}")
             return 0.0
 
     def _load_robots(self, domain: str):
@@ -57,3 +59,17 @@ class RobotChecker:
         except Exception as e:
             print(f"[!] Could not load robots.txt for {domain}: {e}")
             self.parsers[domain] = None
+
+    def set_user_agent(self, user_agent: str):
+        self.user_agent = user_agent
+
+    def clear_cache(self):
+        self.parsers.clear()
+
+    def is_cached(self, url: str) -> bool:
+        try:
+            parsed = urlparse(url)
+            domain = f"{parsed.scheme}://{parsed.netloc}"
+            return domain in self.parsers
+        except:
+            return False
