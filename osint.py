@@ -13,6 +13,9 @@ from color.color import Colors
 from crawler.proxy import ProxyManager
 from crawler.requestor import crawler
 from crawler.robot import RobotChecker
+from socialMedia.if_breached import email, ip, additional_ip, if_leaked
+from socialMedia.sherlock import check_user
+from Geoloc.Geolocating import extract_exif
 
 load_dotenv()
 
@@ -66,6 +69,9 @@ def show_banner():
        Supports 106 dorks across multiple categories for both domain
        and person-based intelligence gathering.
        And Additional Crawler for a given website.
+       With Geolocation from extract exif metadata, IP-email address recon
+       to check if it leaked.
+       Along with Sherlock usage
 
      TARGET TYPES:
        • DOMAIN MODE: Scan websites, infrastructure, files
@@ -77,6 +83,10 @@ def show_banner():
        python osint.py -t github.com -d 5  # Run domain dork
        python osint.py -t "John Doe" -d 63 # Run person dork
        python osint.py -t site.com -d 5 --crawl  # With crawler
+       python osint.py -e "johndoe@gmail.com"
+       python osint.py -s "john doe"
+       python osint.py -i 111.111.11.1
+       python osint.py -g image.jpg
 
     LEGAL DISCLAIMER:
        This tool is made just for learning, experimentation, and general OSINT curiosity using publicly available information. 
@@ -210,7 +220,11 @@ Examples:
   python osint.py -t site.com -d 5 -o results.json  # Save to file
   python osint.py -t site.com -d 5 --depth 2        # Deeper crawling
   python osint.py -t site.com -d 5 --no-robots      # Ignore robots.txt
-        """
+  python osint.py -e "johndoe@gmail.com"
+  python osint.py -s "john doe"
+  python osint.py -i 111.111.11.1
+  python osint.py -g image.jpg
+"""
     )
 
     parser.add_argument("-t", "--target", help="Target domain or person name")
@@ -222,6 +236,10 @@ Examples:
     parser.add_argument("--depth", type=int, default=1, help="Crawler depth (default: 1)")
     parser.add_argument("--no-robots", action="store_true", help="Ignore robots.txt restrictions")
     parser.add_argument("--max-results", type=int, default=10, help="Maximum results to fetch (default: 10)")
+    parser.add_argument("-g", "--geo_with_exif", help="Extract Geolocation data from exifdata")
+    parser.add_argument("-i", "--if_leaked", help="Query API if your IP is Leaked-Breached")
+    parser.add_argument("-e", "--email", help="Query API if your email is Leaked-Breached")
+    parser.add_argument("-s", "--sherlock", help="User Sherlock for username enum")
 
     args = parser.parse_args()
 
@@ -422,6 +440,21 @@ Examples:
         print(Colors.red(f"[!] Unexpected error: {e}"))
         import traceback
         traceback.print_exc()
+
+
+    if args.sherlock:
+        check_user(args.sherlock)
+
+    if args.if_leaked:
+        ip(args.if_leaked)
+
+    if args.email:
+        email(args.email)
+
+    if args.geo_with_exif:
+        extract_exif(args.geo_with_exif)
+
+
 
 
 if __name__ == '__main__':
